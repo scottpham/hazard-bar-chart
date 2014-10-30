@@ -26,7 +26,7 @@ var colors = {
 //check for svg
 $(window).load(function() {
     draw_graphic();
-}
+});
 
 function draw_graphic(){
     if (Modernizr.svg){
