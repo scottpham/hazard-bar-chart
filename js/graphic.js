@@ -1,13 +1,14 @@
-var mobileThreshold = 300, //set to 500 for testing
+var mobileThreshold = 500, //set to 500 for testing
     aspect_width = 16,
-    aspect_height = 9;
+    aspect_height = 9,
+    tickNumber = 10;
 
 //standard margins
 var margin = {
     top: 30,
-    right: 30,
+    right: 40,
     bottom: 20,
-    left: 30
+    left: 135
 };
 //jquery shorthand
 var $graphic = $('#graphic');
@@ -35,17 +36,26 @@ function draw_graphic(){
         render(width);
         window.onresize = draw_graphic; //very important! the key to responsiveness
     }
+
 }
 
 function render(width) {
+    var selected = $("#dropdown").val();
+        console.log("dropdown = " + selected );
 
     //empty object for storing mobile dependent variables
     var mobile = {};
     //check for mobile
     function ifMobile (w) {
         if(w < mobileThreshold){
+            console.log("mobileThreshold reached");
+            mobile.fontSize = "13px";
+            margin.left = 100;
+            // margin.right= 
         }
         else{
+            mobile.fontSize = null;
+            margin.left = 135;
         }
     } 
     //call mobile check
@@ -53,27 +63,28 @@ function render(width) {
     //calculate height against container width
     var height = Math.ceil((width * aspect_height) / aspect_width) - margin.top - margin.bottom;
 
+    console.log("height = " + height);
 
-    var x = d3.scale.linear().range([0, width]),
+    height > 330 ? height = 330: null;
+
+    var x = d3.scale.linear().range([0, width-margin.left-margin.right]),
+        //second param is a gap
         y = d3.scale.ordinal().rangeRoundBands([0, height], 0.15);
 
     var format = d3.format("0.2f"); //formats to two decimal places
 
     var xAxis = d3.svg.axis()
         .scale(x)
-        .ticks(tickNumber)
-        .tickFormat()
-        .orient("top")
-        .tickSize(5, 0, 0);
+        .tickFormat("")//"" means blank
+        .orient("top");
 
     var yAxis = d3.svg.axis()
         .scale(y)
-        .orient("left")
-        .tickSize(5, 0, 0);
+        .orient("left");
 
     //create main svg container
     var svg = d3.select("#graphic").append("svg")
-        .attr("width", width + margin.left + margin.right)
+        .attr("width", width)
         .attr("height", height + margin.top + margin.bottom)
         .append("g")
         .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
@@ -87,30 +98,124 @@ function render(width) {
     var make_x_axis = function() { 
         return d3.svg.axis()
             .scale(x)
-                .orient("bottom")
-                .ticks(tickNumber)
-            }
+                .orient("bottom");
+            };
+
+    console.log(selected);
 
     //asynchronous csv call
-    d3.csv("DATAFILE.CSV", type, function(error, data) {
+    d3.csv("spills.csv", type, function(error, data) {
+        //x domain is between 0 and max of the selected
+        x.domain([0, d3.max(data, function(d){ return 158; })]);
+        //y domain sorts counties based on selected value
+        y.domain(data.sort( function (a, b) { return b[selected] - a[selected]; }).map(function(d) { return d.county}));
 
-        //BUILD GRID
+        //bars
+        svg.selectAll(".bar")
+              .data(data)
+            .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", 0)
+                .attr("fill", colors.orange3)
+                .attr("width", function(d){ return x(d[selected]); })
+                .attr("y", function(d){ return y(d.county); })
+                .attr("height", y.rangeBand());
+
+        //value labels
+        svg.selectAll(".label")
+            .data(data)
+            .enter().append("text")
+                .attr("class", "label")
+                .text(function(d) { return d[selected] })
+                .attr("y", function(d){ return y(d.county) + (y.rangeBand()/2); })
+                .attr("x", function(d){ return x(d[selected]) + 3; })
+                .attr("dy", 3);
+
+        //append g for county names
         svg.append("g")
-            .attr("class", "grid")
-            .attr("transform", "translate(0," + height + ")")
-            .call(make_x_axis()
-                .tickSize((-height - 10), 0, 0) //grid lines are actually ticks
-                .tickFormat("")
-            )
+            .attr("transform", "translate(0,0)")
+            .attr("class", "y axis")
+            .call(yAxis)
+                .attr("text-anchor", "end");
+
+        svg.selectAll(".tick").style("font-size", mobile.fontSize)
+
+        //x axis
+        svg.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0,0)")
+            .call(xAxis);
     
     //end of csv call function
     });
 
-    //coercion function called back during csv call
+   //coercion function called back during csv call
     function type(d){
-        d.value = +d.value;
+        d[selected] = +d[selected];
         return d;
     }
+
+
+    ///////////events////////////
+
+    d3.select("#dropdown").on("change", function(){ 
+        //reset selected
+        selected = this.value;
+
+        d3.csv("spills.csv", type, function(error, data){
+            //standard transitions
+            var t = svg.transition().duration(500),
+            delay = function(d, i){ return i * 150; };
+
+            //resort the counties
+            var ySort = y.domain(data.sort( function(a, b){ return b[selected] - a[selected]; })
+                .map(function(d){ return d.county; }));
+
+            //these events chain one after the other
+            //because there is a delay, all functions fire for each county and then cycles again
+            function sortCounties(){
+                t.selectAll(".bar")
+                    .attr("y", function(d){ 
+                        return ySort(d.county); })
+                    .each(resizeBars)
+                    .delay(delay)
+                    ;
+            }
+
+            sortCounties();
+
+            //resize bars
+            function resizeBars(){
+                t.selectAll(".bar")
+                    .attr("width", function(d){ return x(d[selected]); })
+                    .each(moveLabel) //call move label at end
+                    .delay(delay)
+                    ;
+                }
+
+            function moveLabel() {
+
+                t.selectAll(".label")
+                    .attr("x", function(d){ return x(d[selected]) + 3; })
+                    .text(function(d){ return d[selected]; })
+                    .attr("y", function(d){ return ySort(d.county) + (y.rangeBand()/2); })
+                    .each(callAxis)
+                    .delay(delay)
+                    ;
+                }
+
+            function callAxis() {
+                t.selectAll(".y.axis")
+                    .call(yAxis)
+                    .selectAll(".tick")
+                    .delay(delay);  
+            }
+            
+
+        });//end of d3.csv
+
+
+    });
 
 }//end function render    
 
