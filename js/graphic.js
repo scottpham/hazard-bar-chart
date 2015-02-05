@@ -126,7 +126,7 @@ function render(width) {
             .data(data)
             .enter().append("text")
                 .attr("class", "label")
-                .text(function(d) { return d[selected] })
+                .text(function(d) { if(d){ return d[selected]} else{ return "0"} ; })
                 .attr("y", function(d){ return y(d.county) + (y.rangeBand()/2); })
                 .attr("x", function(d){ return x(d[selected]) + 3; })
                 .attr("dy", 3);
