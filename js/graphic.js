@@ -116,7 +116,7 @@ function render(width) {
             .enter().append("rect")
                 .attr("class", "bar")
                 .attr("x", 0)
-                .attr("fill", colors.orange3)
+                .attr("fill", "#bf600a")
                 .attr("width", function(d){ return x(d[selected]); })
                 .attr("y", function(d){ return y(d.county); })
                 .attr("height", y.rangeBand());
